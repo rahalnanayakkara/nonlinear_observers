@@ -3,6 +3,7 @@ from nonlinear_system.sample_odes import LorenzSystem
 from moving_polyfit.moving_ls import PolyEstimator
 import numpy as np
 import matplotlib.pyplot as plt
+import math
 from numpy.polynomial import Polynomial as P
 
 np.random.seed(0)
@@ -168,7 +169,7 @@ for t in range(1, num_sampling_steps):
 
         # compute a bound on derivative estimation error from residuals
         for q in range(d):
-            bounds[q, t-delay] = np.dot(residual[:, t-delay] + np.abs(noise_samples[:, t-N+1:t+1]), l_bound[:, q])
+            bounds[q, t-delay] = np.dot(residual[:, t-delay] + np.abs(noise_samples[:, t-N+1:t+1]), l_bound[:, q])[0]
 
     else:
         theta_poly[:, t] = 0.0
@@ -182,15 +183,15 @@ for t in range(1, num_sampling_steps):
 M = np.max(np.abs(y_derivs[min(ODE.nderivs-1, d), :]))
 global_bounds = np.empty((d,))
 for q in range(d):
-    # global_bounds[q] = (M/np.math.factorial(d+1))*np.dot(l_bound[:, q],
+    # global_bounds[q] = (M/math.factorial(d+1))*np.dot(l_bound[:, q],
     #                                                     np.linspace(0.0, (N-1)*sampling_dt, N, endpoint=True)**(d+1))
-    # global_bounds[q] = (M/(np.math.factorial(d+1)))*(np.sqrt(N**2+N))*((N*sampling_dt)**(d+1))*np.max(l_bound[:, q])
-    # global_bounds[q] += (M/(np.math.factorial(d-q+1)))*(((q+1)*sampling_dt)**(d-q+1))
+    # global_bounds[q] = (M/(math.factorial(d+1)))*(np.sqrt(N**2+N))*((N*sampling_dt)**(d+1))*np.max(l_bound[:, q])
+    # global_bounds[q] += (M/(math.factorial(d-q+1)))*(((q+1)*sampling_dt)**(d-q+1))
 
     # the factorial expression is equivalent to math.comb(d, max(0, q-1))
-    comb = np.math.factorial(d)//(np.math.factorial(d-q+1)*np.math.factorial(max(0, q-1)))
+    comb = math.factorial(d)//(math.factorial(d-q+1)*math.factorial(max(0, q-1)))
     bounds[q, :] += M*comb*((delta*sampling_dt)**(d-q+1))
-    #  bounds[q, :] += (M/(np.math.factorial(d-q+1)))*(((q+1)*delta*sampling_dt)**(d-q+1))
+    #  bounds[q, :] += (M/(math.factorial(d-q+1)))*(((q+1)*delta*sampling_dt)**(d-q+1))
 
 Ddelta = delay
 Nn = d
