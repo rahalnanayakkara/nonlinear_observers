@@ -3,7 +3,19 @@ from nonlinear_system.sample_odes import Integrator
 import numpy as np
 import matplotlib.pyplot as plt
 
+'''
+Sample code to simulate a continuous time integrator system using the objects in this repo
 
+    dx/dt = f(t,x,u)
+    y(t) = h(t,x,u)
+
+ControlAffineODE type objects holds the f and g functions, as well as n,m,p dimension variables
+
+ContinuousTimeSystem type object takes as input an ODE, initial state, time step etc to generate
+solution trajectories to the ODE
+'''
+
+# Cntroller Action
 def control_input(t, y):
     return -10.0*y[0] - 10.0*y[1]
 
@@ -19,16 +31,17 @@ time = np.zeros((num_steps,))
 x0 = np.random.uniform(low=-1.0, high=1.0, size=n)  # generate a random initial state
 x[:, 0] = x0
 
-sys = ContinuousTimeSystem(Integrator(n), x0=x0, dt=0.001)
+ode = Integrator(n) # use n-dimensional Integrator (built-in) as ODE
+sys = ContinuousTimeSystem(ode, x0=x0, dt=0.001) # create system using ODE
 y[:, 0] = sys.y
 
-print("Initialized CT system object.")
+print("Initialized CT System object.")
 
 for t in range(1, num_steps):
     u[:, t-1] = control_input(sys.t, y[:, t-1])
     x[:, t], y[:, t] = sys.step(u[:, t-1])
     time[t] = sys.t
-    print(f'Completed timestep {t}, t = {sys.t:.1e}, state = {sys.x}')
+    # print(f'Completed timestep {t}, t = {sys.t:.1e}, state = {sys.x}')
 
 
 f = plt.figure(figsize=(12, 12))
@@ -48,9 +61,9 @@ x1_plot.set_ylabel('x[1]')
 x1_plot.grid()
 
 traj_plot.plot(x[0, :], x[1, :], linewidth=2.0, c='blue')
-traj_plot.scatter(x[0, 0], x[1, 0], s=50, marker='*')
-traj_plot.set_xlim(-1.0, 1.0)
-traj_plot.set_ylim(-1.0, 1.0)
+traj_plot.scatter(x[0, 0], x[1, 0], s=50, marker='*', c='red')
+# traj_plot.set_xlim(-1.0, 1.0)
+# traj_plot.set_ylim(-1.0, 1.0)
 traj_plot.set_xlabel('x[0]')
 traj_plot.set_ylabel('x[1]')
 traj_plot.grid()
