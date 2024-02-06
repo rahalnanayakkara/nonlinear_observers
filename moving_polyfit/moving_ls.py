@@ -11,6 +11,7 @@ class PolyEstimator:
         self.N = N
         self.dt = dt
         self.residuals = np.empty((self.N,))
+        self.polynomial = P([0])
 
     def fit(self, y, t0=0.0):
         '''

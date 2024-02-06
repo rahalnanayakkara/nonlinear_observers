@@ -1,4 +1,5 @@
 from nonlinear_system.ct_system import ContinuousTimeSystem
+from nonlinear_system.sample_odes import ControlAffineODE
 from moving_polyfit.moving_ls import PolyEstimator
 import numpy as np
 import matplotlib.pyplot as plt
@@ -7,11 +8,11 @@ import matplotlib.pyplot as plt
 sampling_dt = 1.0  # sampling timestep
 integration_per_sample = 500  # how many integration timesteps should we take between output samples?
 integration_dt = sampling_dt/integration_per_sample
-num_sampling_steps = 20
+num_sampling_steps = 40
 num_integration_steps = num_sampling_steps*integration_per_sample
 
 mid_t = 0.0  # sampling_dt*num_sampling_steps/2.0
-f = np.pi/sampling_dt
+f = 0.25*np.pi/sampling_dt
 mag = 1.0
 verbose = False
 
@@ -24,7 +25,7 @@ def dphidt(t, x):
     return f*mag*np.cos(f*t)
 
 
-def rhs(t, x, u):
+def rhs_f(t, x):
     '''
     RHS for n-dimensional integrator ODE
     dx[i]/dt = x[i+1]
@@ -50,20 +51,19 @@ p = 1  # output dimension
 d = 4  # degree of estimation polynomial
 N = 10  # number of samples
 estimator = PolyEstimator(d, N, sampling_dt)
-global_thetas = False
 
 x = np.empty((n, num_integration_steps))
 y = np.empty((p, num_integration_steps))
 
-y_samples = np.empty((d, num_sampling_steps))
+y_samples = np.empty((d, num_sampling_steps))   # sampled true output and it's d derivatives
 x_samples = np.empty((n, num_sampling_steps))
 u = np.empty((m, num_sampling_steps-1))
 
-theta = np.empty((d, num_sampling_steps))
+theta = np.empty((d+1, num_sampling_steps)) # coefficients of fitted polynomial
 dphi_hat = np.empty((num_sampling_steps,))
-yhat = np.empty((d, num_sampling_steps))
+yhat = np.empty((d, num_sampling_steps))    # estimated output and it's d derivatives
 
-y_true = np.zeros((d, num_integration_steps))
+y_true = np.zeros((d, num_integration_steps))   # true output and it's d derivatives
 
 integration_time = np.zeros((num_integration_steps,))
 sampling_time = np.zeros((num_sampling_steps,))
@@ -72,10 +72,14 @@ x0 = np.array([0.0, -mag/f])
 x[:, 0] = x0
 x_samples[:, 0] = x0
 
-sys = ContinuousTimeSystem(2, rhs, h=output_fn, x0=x0, dt=integration_dt, solver='RK45')
+ode = ControlAffineODE(state_dim=n, input_dim=m, output_dim=p, f=rhs_f, h=output_fn)
+sys = ContinuousTimeSystem(ode, x0=x0, dt=integration_dt)
+
 y[:, 0] = sys.y
 y_samples[0, 0] = sys.y
 y_true[0, 0] = sys.y
+
+pols = []
 
 print("Initialized CT system object.")
 
@@ -108,19 +112,12 @@ for t in range(1, num_sampling_steps):
 
     # estimate with polyfit
     if t >= N-1:
-        if global_thetas:
-            # fit polynomial
-            theta[:, t] = estimator.fit_global(y_samples[0, t-N+1:t+1], sampling_time[t-N+1])
+        # fit polynomial
+        theta[:, t] = estimator.fit(y_samples[0, t-N+1:t+1])
+        pols.append((t, estimator.polynomial.copy()))
 
-            # estimate with polynomial derivatives at endpoint
-            for i in range(d):
-                yhat[i, t] = estimator.differentiate(sampling_time[t], i)
-        else:
-            # fit polynomial
-            theta[:, t] = estimator.fit(y_samples[0, t-N+1:t+1])
-
-            # estimate with polynomial derivatives at endpoint
-            for i in range(d):
+        # estimate with polynomial derivatives at endpoint
+        for i in range(d):
                 yhat[i, t] = estimator.differentiate((N-1)*sampling_dt, i)
     else:
         theta[:, t] = 0.0
@@ -158,8 +155,8 @@ traj_plot.scatter(x[0, 0], x[1, 0], s=50, marker='*', c='blue')
 traj_plot.scatter(yhat[0, N], yhat[1, N], s=50, marker='*', c='red')
 traj_plot.scatter(x_samples[0, :], x_samples[1, :], s=50, marker='x', c='blue')
 marg = 0.1
-traj_plot.set_xlim(x[0, :].min()-marg, x[0, :].max()+marg)
-traj_plot.set_ylim(x[1, :].min()-marg, x[1, :].max()+marg)
+# traj_plot.set_xlim(x[0, :].min()-marg, x[0, :].max()+marg)
+# traj_plot.set_ylim(x[1, :].min()-marg, x[1, :].max()+marg)
 traj_plot.set_xlabel('x1')
 traj_plot.set_ylabel('x2')
 traj_plot.legend(loc='upper right')
@@ -202,5 +199,31 @@ yhat_plot.grid()
 yhat_plot.set_title('Output signal estimation errors')
 
 f2.tight_layout()
+
+f3 = plt.figure("Outputs", figsize=(12,8))
+for i in range(d):
+    fig_plot = f3.add_subplot(2,d//2,i+1)
+    fig_plot.plot(integration_time, y_true[i,:], label="True")
+    fig_plot.scatter(sampling_time, y_samples[i,:], c='orange', label="Samples")
+    fig_plot.plot(sampling_time, yhat[i,:], label="Estimated")
+    fig_plot.legend()
+    fig_plot.set_ylim(y_true[i,:].min()-marg, y_true[i,:].max()+marg)
+    fig_plot.set_xlabel("time (s)")
+    fig_plot.set_ylabel(f"$y^{i}(t)$")
+f3.tight_layout()
+
+
+f4 = plt.figure("Polynomial Fitting", figsize=(12,8))
+ax4 = f4.add_subplot(111)
+ax4.plot(integration_time, y_true[1,:], label="True")
+ax4.scatter(sampling_time, y_samples[1,:], c='orange', label="Samples")
+ax4.plot(sampling_time, yhat[1,:], label="Estimated")
+
+for (t,pol) in pols:
+    time_range = np.arange(t-N+1, t, integration_dt)
+    pol_val = pol.deriv(1)(np.arange(0, N-1, integration_dt))
+    ax4.plot(time_range, pol_val, label=str(t-N+1))
+    ax4.legend()
+f4.tight_layout()
 
 plt.show()
