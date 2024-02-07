@@ -78,7 +78,7 @@ for i in range(num_t_points):
     l_indices[i] = start + i*delta
 
 l_times = window_times[l_indices]  # pull the subset of chosen time indices
-verbose_lagrange = False  # to see computation details of lagrange polynomial construction/derivatives
+verbose_lagrange = True  # to see computation details of lagrange polynomial construction/derivatives
 
 for i in range(num_t_points):
     # build the lagrange polynomial, which is zero at all evaluation samples except one
@@ -89,7 +89,7 @@ for i in range(num_t_points):
     # to checking that you built the right lagrange polynomial, evaluate it at the relevant points
     if verbose_lagrange:
         for j in range(num_t_points):
-            print(f't = {l_times[j]:.3f}, l_i(t) = {l_i(l_times[j])}')
+            print(f't = {l_times[j]:.3f}, l_{i}(t) = {l_i(l_times[j])}')
 
     # for every derivative that we estimate, compute this lagrange polynomial's derivative at the estimation time
     for q in range(d):

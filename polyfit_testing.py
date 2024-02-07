@@ -110,11 +110,11 @@ for t in range(1, num_sampling_steps):
     y_samples[sys.n, t] = phi(sys.t, x_samples[:, t])
     y_samples[sys.n+1, t] = dphidt(sys.t, x_samples[:, t])
 
-    # estimate with polyfit
+    # estimate with polyfit (Need to reach at least N-1 samples first)
     if t >= N-1:
         # fit polynomial
-        theta[:, t] = estimator.fit(y_samples[0, t-N+1:t+1])
-        pols.append((t, estimator.polynomial.copy()))
+        theta[:, t] = estimator.fit(y_samples[0, t-N+1:t+1])    # store polynomial coefficients
+        pols.append((t, estimator.polynomial.copy()))   # store polynomials for later plotting
 
         # estimate with polynomial derivatives at endpoint
         for i in range(d):
@@ -206,6 +206,7 @@ for i in range(d):
     fig_plot.plot(integration_time, y_true[i,:], label="True")
     fig_plot.scatter(sampling_time, y_samples[i,:], c='orange', label="Samples")
     fig_plot.plot(sampling_time, yhat[i,:], label="Estimated")
+    fig_plot.grid()
     fig_plot.legend()
     fig_plot.set_ylim(y_true[i,:].min()-marg, y_true[i,:].max()+marg)
     fig_plot.set_xlabel("time (s)")
@@ -213,17 +214,17 @@ for i in range(d):
 f3.tight_layout()
 
 
-f4 = plt.figure("Polynomial Fitting", figsize=(12,8))
-ax4 = f4.add_subplot(111)
-ax4.plot(integration_time, y_true[1,:], label="True")
-ax4.scatter(sampling_time, y_samples[1,:], c='orange', label="Samples")
-ax4.plot(sampling_time, yhat[1,:], label="Estimated")
+# f4 = plt.figure("Polynomial Fitting", figsize=(12,8))
+# ax4 = f4.add_subplot(111)
+# ax4.plot(integration_time, y_true[1,:], label="True")
+# ax4.scatter(sampling_time, y_samples[1,:], c='orange', label="Samples")
+# ax4.plot(sampling_time, yhat[1,:], label="Estimated")
 
-for (t,pol) in pols:
-    time_range = np.arange(t-N+1, t, integration_dt)
-    pol_val = pol.deriv(1)(np.arange(0, N-1, integration_dt))
-    ax4.plot(time_range, pol_val, label=str(t-N+1))
-    ax4.legend()
-f4.tight_layout()
+# for (t,pol) in pols:
+#     time_range = np.arange(t-N+1, t, integration_dt)
+#     pol_val = pol.deriv(1)(np.arange(0, N-1, integration_dt))
+#     ax4.plot(time_range, pol_val, label=str(t-N+1))
+#     ax4.legend()
+# f4.tight_layout()
 
 plt.show()
