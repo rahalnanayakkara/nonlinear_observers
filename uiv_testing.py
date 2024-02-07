@@ -1,0 +1,102 @@
+from nonlinear_system.ct_system import ContinuousTimeSystem
+from nonlinear_system.epidem_odes import UIV
+from moving_polyfit.moving_ls import PolyEstimator
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+sampling_dt = 1
+integration_per_sample = 100
+integration_dt = sampling_dt/integration_per_sample
+num_sampling_steps = 20
+num_integration_steps = num_sampling_steps*integration_per_sample
+
+uiv_ode = UIV(beta=1, p=1)
+n = uiv_ode.n
+m = uiv_ode.m
+p = uiv_ode.p
+
+U0 = 4
+x0 = [U0, 0, 50e-8]
+
+nderivs = uiv_ode.nderivs
+
+d = 2
+N = 4
+
+delay = N//2
+estimator = PolyEstimator(d, N, sampling_dt)
+
+x = np.zeros((n, num_integration_steps))
+y_d = np.zeros((nderivs, num_integration_steps))
+
+y_samples = np.zeros((nderivs, num_sampling_steps))
+y_hat = np.zeros((nderivs, num_sampling_steps))
+x_samples = np.zeros((n, num_sampling_steps))
+x_hat = np.zeros((n, num_sampling_steps))
+
+theta = np.empty((d+1, num_sampling_steps)) # coefficients of fitted polynomial
+
+integration_time = np.zeros((num_integration_steps,))
+sampling_time = np.zeros((num_sampling_steps,))
+
+x[:, 0] = x0
+x_samples[:, 0] = x0
+
+sys = ContinuousTimeSystem(uiv_ode, x0=x0, dt=integration_dt)
+
+y_d[:, 0] = sys.y
+y_samples[:, 0] = sys.y
+
+for t in range(0, num_sampling_steps):
+
+    for i in range(integration_per_sample):
+        idx = t*integration_per_sample + i
+        x[:, idx], y_d[:, idx] = sys.step(0)
+        integration_time[idx] = sys.t
+    
+    sampling_time[t] = sys.t
+    y_samples[:,t] = sys.y
+    x_samples[:,t] = sys.x
+
+    if t >= N-1:
+        # fit polynomial
+        theta[:, t] = estimator.fit(y_samples[0, t-N+1:t+1])    # store polynomial coefficients
+
+        # estimate with polynomial derivatives at endpoint
+        for i in range(nderivs):
+            y_hat[i, t-delay+1] = estimator.differentiate((N-delay)*sampling_dt, i)
+        
+        x_hat[:, t-delay+1] = uiv_ode.invert_output(t=t-delay+1, y_d=y_hat[:, t-delay+1])
+
+    else:
+        theta[:, t] = 0.0
+        y_hat[:, t] = 0.0
+        x_hat[0, t] = U0
+
+states = ["U", "I", "V"]
+
+f1 = plt.figure("State Evolution", figsize=(12,8))
+for i in range(n):
+    ax = f1.add_subplot(1,n,i+1)
+    ax.plot(integration_time, x[i,:], label=states[i])
+    if i==2:
+        ax.scatter(sampling_time, x_samples[i,:], label=states[i]+" Sampled")
+    ax.plot(sampling_time, x_hat[i,:], label=states[i]+" Estimate")
+    ax.grid()
+    ax.legend()
+f1.tight_layout()
+
+f2 = plt.figure("Output Derivatives", figsize=(12,8))
+for derivs in range(nderivs):
+    ax2 = f2.add_subplot(1, nderivs, derivs+1)
+    ax2.plot(integration_time, y_d[derivs,:], label="Actual")
+    ax2.scatter(sampling_time, y_samples[derivs,:], label="Value at Sample Time")
+    ax2.plot(sampling_time, y_hat[derivs,:], label="Estimated")
+    ax2.grid()
+    ax2.set_xlabel("Time (days)")
+    ax2.set_ylabel(f"$y^{derivs}(t)$")
+    ax2.legend()
+f2.tight_layout()
+
+plt.show()

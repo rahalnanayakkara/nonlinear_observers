@@ -1,17 +1,17 @@
 import numpy as np
-from sample_odes import ControlAffineODE
+from nonlinear_system.sample_odes import ControlAffineODE
 
 NDERIVS = 3
 
 class UIV(ControlAffineODE):
 
-    def __init__(self,  beta=4.71, delta=1.07, p=3.07, c=2.3, f=None, g=None, h=None):
+    def __init__(self,  beta=4.71, delta=1.07, p=3.07, c=2.3):
         self.beta = beta
         self.delta = delta
         self.p = p
         self.c = c
         self.nderivs = NDERIVS
-        super().__init__(state_dim=3, input_dim=1, output_dim=1, f=self.uiv_f, h=self.output_fn)
+        super().__init__(state_dim=3, input_dim=1, output_dim=3, f=self.uiv_f, h=self.output_derivative)
     
     def uiv_f(self, t: float, x: np.ndarray):
         '''
@@ -42,11 +42,11 @@ class UIV(ControlAffineODE):
         y_d[2] = self.p*self.beta*x[0]*x[2] - (self.c+self.delta)*y_d[1] - self.delta*self.c*x[2]
         return y_d
     
-    def invert_output(self, t: float, y_d: np.ndarray, u: np.ndarray):
+    def invert_output(self, t: float, y_d: np.ndarray, u: np.ndarray = None):
         '''
         Function that maps the output and it's derivatives to the system states
         '''
-        xhat = np.ndarray([
+        xhat = np.array([
             (y_d[2]+(self.delta+self.c)*y_d[1]+self.delta*self.c*y_d[0])/(self.p*self.beta*y_d[0]),
             (y_d[1]+self.c*y_d[0])/self.p,
             y_d[0]
