@@ -63,7 +63,7 @@ for t in range(0, num_sampling_steps):
         # fit polynomial
         theta[:, t] = estimator.fit(y_samples[0, t-N+1:t+1])    # store polynomial coefficients
 
-        # estimate with polynomial derivatives at endpoint
+        # estimate with polynomial derivatives at midpoint = t-(N-1)+(N-delay)
         for i in range(nderivs):
             y_hat[i, t-delay+1] = estimator.differentiate((N-delay)*sampling_dt, i)
         
@@ -72,7 +72,7 @@ for t in range(0, num_sampling_steps):
     else:
         theta[:, t] = 0.0
         y_hat[:, t] = 0.0
-        x_hat[0, t] = U0
+        # x_hat[0, t] = U0
 
 states = ["U", "I", "V"]
 
@@ -82,7 +82,7 @@ for i in range(n):
     ax.plot(integration_time, x[i,:], label=states[i])
     if i==2:
         ax.scatter(sampling_time, x_samples[i,:], label=states[i]+" Sampled")
-    ax.plot(sampling_time, x_hat[i,:], label=states[i]+" Estimate")
+    ax.plot(sampling_time[N-1:], x_hat[i, N-1:], label=states[i]+" Estimate")
     ax.grid()
     ax.legend()
 f1.tight_layout()
@@ -92,7 +92,7 @@ for derivs in range(nderivs):
     ax2 = f2.add_subplot(1, nderivs, derivs+1)
     ax2.plot(integration_time, y_d[derivs,:], label="Actual")
     ax2.scatter(sampling_time, y_samples[derivs,:], label="Value at Sample Time")
-    ax2.plot(sampling_time, y_hat[derivs,:], label="Estimated")
+    ax2.plot(sampling_time[N-1:], y_hat[derivs, N-1:], label="Estimated")
     ax2.grid()
     ax2.set_xlabel("Time (days)")
     ax2.set_ylabel(f"$y^{derivs}(t)$")
