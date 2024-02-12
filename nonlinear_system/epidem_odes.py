@@ -52,3 +52,14 @@ class UIV(ControlAffineODE):
             y_d[0]
         ])
         return xhat
+    
+    def invert_output2(self, t: float, y_d: np.ndarray, u: np.ndarray = None):
+        '''
+        Function that maps the output and it's derivatives to the states [V, I, UV]
+        '''
+        xhat = np.array([
+            y_d[0],
+            (y_d[1]+self.c*y_d[0])/self.p_p,
+            (y_d[2]+(self.delta+self.c)*y_d[1]+self.delta*self.c*y_d[0])/(self.p_p*self.beta)
+        ])
+        return xhat

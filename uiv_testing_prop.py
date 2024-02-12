@@ -36,8 +36,8 @@ x0 = [U0, 0, 0]
 
 nderivs = uiv_ode.nderivs
 
-d = 3
-N = 4
+d = 4
+N = 6
 
 delay = 1
 infection_step = 0  # default is 0
