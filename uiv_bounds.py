@@ -29,7 +29,7 @@ noise_mag = 0.5  # magnitude of noise to be applied to outputs
 ODE = UIV()
 n = ODE.n
 m = ODE.m
-p = ODE.p
+p = ODE.p_p
 
 
 def noise_generator(t: float, mag: float, p: int) -> np.ndarray:

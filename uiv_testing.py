@@ -4,14 +4,17 @@ from moving_polyfit.moving_ls import PolyEstimator
 import numpy as np
 import matplotlib.pyplot as plt
 
+verbose = True
 
-sampling_dt = 1
+sampling_dt = 0.5
 integration_per_sample = 100
 integration_dt = sampling_dt/integration_per_sample
-num_sampling_steps = 20
+num_sampling_steps = 30
 num_integration_steps = num_sampling_steps*integration_per_sample
 
-uiv_ode = UIV(beta=1, p=1)
+uiv_ode = UIV()
+beta = uiv_ode.beta
+p_p = uiv_ode.p_p
 n = uiv_ode.n
 m = uiv_ode.m
 p = uiv_ode.p
@@ -68,6 +71,9 @@ for t in range(0, num_sampling_steps):
             y_hat[i, t-delay+1] = estimator.differentiate((N-delay)*sampling_dt, i)
         
         x_hat[:, t-delay+1] = uiv_ode.invert_output(t=t-delay+1, y_d=y_hat[:, t-delay+1])
+        
+        if verbose:
+            print(f"On day {t} we estimate day {t-delay+1}")
 
     else:
         theta[:, t] = 0.0
@@ -85,6 +91,7 @@ for i in range(n):
     ax.plot(sampling_time[N-1:], x_hat[i, N-1:], label=states[i]+" Estimate")
     ax.grid()
     ax.legend()
+f1.suptitle(f"beta = {beta}, p={p_p}, delay={delay-1}")
 f1.tight_layout()
 
 f2 = plt.figure("Output Derivatives", figsize=(12,8))
@@ -97,6 +104,7 @@ for derivs in range(nderivs):
     ax2.set_xlabel("Time (days)")
     ax2.set_ylabel(f"$y^{derivs}(t)$")
     ax2.legend()
+f2.suptitle(f"beta = {beta}, p={p_p}, delay={delay-1}")
 f2.tight_layout()
 
 plt.show()

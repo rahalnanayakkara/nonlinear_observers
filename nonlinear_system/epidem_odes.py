@@ -8,7 +8,7 @@ class UIV(ControlAffineODE):
     def __init__(self,  beta=4.71, delta=1.07, p=3.07, c=2.3):
         self.beta = beta
         self.delta = delta
-        self.p = p
+        self.p_p = p
         self.c = c
         self.nderivs = NDERIVS
         super().__init__(state_dim=3, input_dim=1, output_dim=3, f=self.uiv_f, h=self.output_derivative)
@@ -25,7 +25,7 @@ class UIV(ControlAffineODE):
         rhs = np.array([
             -self.beta*x[0]*x[2],
             self.beta*x[0]*x[2] - self.delta*x[1],
-            self.p*x[1] - self.c*x[2]
+            self.p_p*x[1] - self.c*x[2]
         ])
         return rhs
     
@@ -39,7 +39,7 @@ class UIV(ControlAffineODE):
         y_d = np.empty((NDERIVS,))
         y_d[0] = x[2]
         y_d[1] = self.rhs(t, x, u)[2]
-        y_d[2] = self.p*self.beta*x[0]*x[2] - (self.c+self.delta)*y_d[1] - self.delta*self.c*x[2]
+        y_d[2] = self.p_p*self.beta*x[0]*x[2] - (self.c+self.delta)*y_d[1] - self.delta*self.c*x[2]
         return y_d
     
     def invert_output(self, t: float, y_d: np.ndarray, u: np.ndarray = None):
@@ -47,8 +47,8 @@ class UIV(ControlAffineODE):
         Function that maps the output and it's derivatives to the system states
         '''
         xhat = np.array([
-            (y_d[2]+(self.delta+self.c)*y_d[1]+self.delta*self.c*y_d[0])/(self.p*self.beta*y_d[0]),
-            (y_d[1]+self.c*y_d[0])/self.p,
+            (y_d[2]+(self.delta+self.c)*y_d[1]+self.delta*self.c*y_d[0])/(self.p_p*self.beta*y_d[0]),
+            (y_d[1]+self.c*y_d[0])/self.p_p,
             y_d[0]
         ])
         return xhat
