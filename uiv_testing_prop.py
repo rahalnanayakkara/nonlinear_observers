@@ -3,10 +3,12 @@ from nonlinear_system.epidem_odes import UIV
 from moving_polyfit.moving_ls import PolyEstimator
 import numpy as np
 import matplotlib.pyplot as plt
+import copy
 
 '''
 Simulate infection spread in a single host using UIV model.
-Obtain an estimate of the internal states by using a polynomial observer on V.
+Obtain an estimate of the internal states by using a polynomial observer on V with a delay.
+Propagate the estimate forward using the differential equation to obtain current states
 
 delay - selects the delay to evaluate the polynomial observer
 infection_step - step in which to initiate viral load. 
@@ -21,7 +23,7 @@ integration_dt = sampling_dt/integration_per_sample
 num_sampling_steps = 30
 num_integration_steps = num_sampling_steps*integration_per_sample
 
-uiv_ode = UIV(beta=1)
+uiv_ode = UIV(beta=1, p=2)
 beta = uiv_ode.beta
 p_p = uiv_ode.p_p
 n = uiv_ode.n
@@ -38,7 +40,7 @@ d = 2
 N = 4
 
 delay = 1
-infection_step = 5  # default is 0
+infection_step = 0  # default is 0
 estimator = PolyEstimator(d, N, sampling_dt)
 
 x = np.zeros((n, num_integration_steps))
@@ -48,6 +50,7 @@ y_samples = np.zeros((nderivs, num_sampling_steps))
 y_hat = np.zeros((nderivs, num_sampling_steps))
 x_samples = np.zeros((n, num_sampling_steps))
 x_hat = np.zeros((n, num_sampling_steps))
+x_hat_prop = np.zeros((n, num_sampling_steps))
 
 theta = np.empty((d+1, num_sampling_steps)) # coefficients of fitted polynomial
 
@@ -62,6 +65,9 @@ sys = ContinuousTimeSystem(uiv_ode, x0=x0, dt=integration_dt)
 y_d[:, 0] = sys.y
 y_samples[:, 0] = sys.y
 
+sys_copy = copy.deepcopy(sys)
+
+print(f"delay = {delay}")
 for t in range(0, num_sampling_steps):
 
     if t==infection_step:
@@ -89,6 +95,12 @@ for t in range(0, num_sampling_steps):
         if verbose:
             print(f"On day {t} we estimate day {t-delay}")
 
+        sys_copy.reset(x0=x_hat[:, t-delay], t=sampling_time[t-delay])
+
+        for i in range(integration_per_sample*delay):
+            sys_copy.step(0)
+        x_hat_prop[:, t] = sys_copy.x
+
     else:
         theta[:, t] = 0.0
         y_hat[:, t] = 0.0
@@ -102,7 +114,8 @@ for i in range(n):
     ax.plot(integration_time, x[i,:], label=states[i])
     if i==2:
         ax.scatter(sampling_time, x_samples[i,:], label=states[i]+" Sampled")
-    ax.plot(sampling_time[N-1:], x_hat[i, N-1:], label=states[i]+" Estimate")
+    ax.scatter(sampling_time[N-1:], x_hat[i, N-1:], label=states[i]+" Estimate")
+    ax.scatter(sampling_time[N-1:], x_hat_prop[i, N-1:], label=states[i]+" Estimate Prop", c='red', marker='x')
     ax.grid()
     ax.legend()
 f1.suptitle(f"beta = {beta}, p={p_p}, delay={delay}")
@@ -113,7 +126,7 @@ for derivs in range(nderivs):
     ax2 = f2.add_subplot(1, nderivs, derivs+1)
     ax2.plot(integration_time, y_d[derivs,:], label="Actual")
     ax2.scatter(sampling_time, y_samples[derivs,:], label="Value at Sample Time")
-    ax2.plot(sampling_time[N-1:], y_hat[derivs, N-1:], label="Estimated")
+    ax2.scatter(sampling_time[N-1:], y_hat[derivs, N-1:], label="Estimated")
     ax2.grid()
     ax2.set_xlabel("Time (days)")
     ax2.set_ylabel(f"$y^{derivs}(t)$")
