@@ -50,7 +50,7 @@ l_times = window_times[l_indices] # times corresponding to D (s0, ..., sd)
 
 def deriv_bound(k, M=M, delta_s=delta_s):
     if k==0:
-        return np.power(delta_s, d+1)*M/(d+1)
+        return 0.25*np.power(delta_s, d+1)*M/(d+1)
     return np.power(delta_s, d-k+1)*M*math.comb(d, k-1)
 
 def state_transform(x):
