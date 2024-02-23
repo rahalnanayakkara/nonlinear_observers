@@ -1,3 +1,6 @@
+import sys
+sys.path.append('./')
+
 from nonlinear_system.ct_system import ContinuousTimeSystem
 from nonlinear_system.epidem_odes import UIV
 from moving_polyfit.moving_ls import PolyEstimator
