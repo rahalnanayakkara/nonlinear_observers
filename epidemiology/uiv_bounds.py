@@ -56,13 +56,6 @@ def deriv_bound(k, M=M, delta_s=delta_s):
         return 0.25*np.power(delta_s, d+1)*M/(d+1)
     return np.power(delta_s, d-k+1)*M*math.comb(d, k-1)
 
-def state_transform(x):
-    x2 = np.zeros(x.shape)
-    x2[0,:] = x[2,:]
-    x2[1,:] = x[1,:]
-    x2[2,:] = x[2,:]*x[0,:]
-    return x2
-
 lagrange_pols = []
 for i in range(num_t_points):
     # build the lagrange polynomial, which is zero at all evaluation samples except one
@@ -165,8 +158,8 @@ for t in range(0, num_sampling_steps):
 states = ["U", "I", "V"]
 states2 = ["V", "I", "UV"]
 
-x2 = state_transform(x)
-x_samples2 = state_transform(x_samples)
+x2 = UIV.state_transform(x)
+x2_samples = UIV.state_transform(x_samples)
 
 # f1 = plt.figure("State Evolution", figsize=(12,8))
 # for i in range(n):
@@ -177,7 +170,7 @@ x_samples2 = state_transform(x_samples)
 #     ax.scatter(sampling_time[N-1:], x_hat_samples[i, N-1:], label=states[i]+" Sampled Estimate")
 #     ax.grid()
 #     ax.legend()
-# f1.suptitle(f"beta = {beta}, p={p_p}, delay={delay}")
+# f1.suptitle(f"beta = {params['beta']}, p={params['p']}, delay={delay}")
 # f1.tight_layout()
 
 f2 = plt.figure("Output Derivatives", figsize=(12,8))
@@ -200,7 +193,7 @@ for i in range(n):
     ax = f3.add_subplot(1,n,i+1)
     ax.fill_between(integration_time, np.maximum(0, x2_hat[i,:]-x2_bound[i,:]), x2_hat[i,:]+x2_bound[i,:], alpha=0.3, color='green', label='Bound')
     ax.plot(integration_time, x2[i,:], label=states2[i])
-    ax.scatter(sampling_time, x_samples2[i,:], label=states2[i]+" at Sample")
+    ax.scatter(sampling_time, x2_samples[i,:], label=states2[i]+" at Sample")
     ax.plot(integration_time, x2_hat[i,:], label=states2[i]+" Estimate")
     ax.scatter(sampling_time[N-1:], x2_hat_samples[i, N-1:], label=states2[i]+" Estimate at Sample")
     ax.set_title(states2[i])

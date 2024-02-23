@@ -63,3 +63,10 @@ class UIV(ControlAffineODE):
             (y_d[2]+(self.delta+self.c)*y_d[1]+self.delta*self.c*y_d[0])/(self.p_p*self.beta)
         ])
         return xhat
+    
+    def state_transform(x):
+        x2 = np.zeros(x.shape)
+        x2[0,:] = x[2,:]
+        x2[1,:] = x[1,:]
+        x2[2,:] = x[2,:]*x[0,:]
+        return x2
