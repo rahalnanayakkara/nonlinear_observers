@@ -38,7 +38,7 @@ nderivs = uiv_ode.nderivs
 N = 6           # Number of samples in a window
 n_gauss = 5     # Number of Gaussian Functions
 
-M = 1.7
+Yd = 0.5
 delta_s = 1
 
 delay = 1
@@ -47,7 +47,7 @@ estimator = GaussEstimator(n_gauss, N, sampling_dt)
 
 eval_time = (N-1-delay)*sampling_dt  # (N-1)*sampling_dt
 
-def deriv_bound_gauss(k, d, M=M, delta_s=delta_s):
+def deriv_bound_gauss(k, d, M, delta_s=delta_s):
     if k==0:
         return 0.25*np.power(delta_s, d+1)*M/(d+1)
     return np.power(delta_s, d-k+1)*M*math.comb(d, k-1)
@@ -129,8 +129,9 @@ for t in range(0, num_sampling_steps):
     x_samples[:,t] = sys.x
 
     if t >= N-1:
-        # fit polynomial
-        theta[:, t] = estimator.fit(y_samples[0, t-N+1:t+1])    # store polynomial coefficients
+        # fit gaussian to N samples at times {t-N+1, ..., t}
+        # time coordinates will be {0, ..., N-1}
+        theta[:, t] = estimator.fit(y_samples[0, t-N+1:t+1])    # store gaussian coefficients
 
         res_pol_d1 = 0*lagrange_pols_d1[0]
         for i,res in enumerate(estimator.residuals[l_indices_d1]):
@@ -140,22 +141,33 @@ for t in range(0, num_sampling_steps):
         for i,res in enumerate(estimator.residuals[l_indices_d2]):
             res_pol_d2 += res*lagrange_pols_d2[i]
 
-        # estimate with polynomial derivatives with delay
+        # estimate with gaussian derivatives with delay (delay samples before last = N-1-delay)
         for j in range(nderivs):
-            y_hat_samples[j, t-delay] = estimator.differentiate((N-delay-1)*sampling_dt, j)[0]
+            y_hat_samples[j, t-delay] = estimator.differentiate((N-1-delay)*sampling_dt, j)[0]
 
         for i in range(integration_per_sample):
             idx = (t-delay)*integration_per_sample + i
+            eval_time = (N-delay-2)*sampling_dt+i*integration_dt
             for j in range(nderivs):
-                eval_time = (N-delay-2)*sampling_dt+i*integration_dt
                 y_hat[j, idx] = estimator.differentiate(eval_time, j)[0]
-                if j==2:
-                    y_bound[j, idx] = np.abs(res_pol_d2.deriv(j)(eval_time))+deriv_bound_gauss(k=j, d=2)
-                else:
-                    y_bound[j, idx] = np.abs(res_pol_d1.deriv(j)(eval_time))+deriv_bound_gauss(k=j, d=n_gauss)
             x_hat[:, idx] = uiv_ode.invert_output(t=t-delay, y_d=y_hat[:, idx])
             x2_hat[:, idx] = uiv_ode.invert_output2(t=t-delay, y_d=y_hat[:, idx])
-
+        
+        # Calculate upper bound for G within the window
+        t_window = np.linspace(N-delay-2, N-delay-1, integration_per_sample, endpoint=False)*sampling_dt
+        
+        for i in range(integration_per_sample):
+            idx = (t-delay)*integration_per_sample + i
+            eval_time = (N-delay-2)*sampling_dt+i*integration_dt
+            for j in range(nderivs):
+                if j==2:
+                    G = np.max(np.abs(estimator.differentiate(t_window, 3)))
+                    # Yd = np.max(np.gradient(y_d[2,:], integration_dt)[(t-delay)*integration_per_sample-1:(t-delay+1)*integration_per_sample-1])
+                    y_bound[j, idx] = np.abs(res_pol_d2.deriv(j)(eval_time))+deriv_bound_gauss(k=j, d=2, M=Yd+G)
+                else:
+                    G = np.max(np.abs(estimator.differentiate(t_window, 2)))
+                    # Yd = np.max(np.gradient(y_d[1,:], integration_dt)[(t-delay)*integration_per_sample-1:(t-delay+1)*integration_per_sample-1])
+                    y_bound[j, idx] = np.abs(res_pol_d1.deriv(j)(eval_time))+deriv_bound_gauss(k=j, d=1, M=Yd+G)
             x2_bound[0, idx] = y_bound[0, idx]
             x2_bound[1, idx] = (y_bound[1,idx]+params['c']*y_bound[0,idx])/params['p']
             x2_bound[2, idx] = (y_bound[2,idx] + (params['c']+params['delta'])*y_bound[1,idx] + params['c']*params['delta']*y_bound[0,idx]) / (params['p']*params['beta'])
