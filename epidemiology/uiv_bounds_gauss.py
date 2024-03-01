@@ -4,6 +4,7 @@ sys.path.append('./')
 from nonlinear_system.ct_system import ContinuousTimeSystem
 from nonlinear_system.epidem_odes import UIV
 from moving_gauss import GaussEstimator
+from lib.func import generate_lagrange, deriv_bound
 import numpy as np
 import matplotlib.pyplot as plt
 import math
@@ -39,7 +40,7 @@ N = 6           # Number of samples in a window
 n_gauss = 5     # Number of Gaussian Functions
 
 Yd = 0.5
-delta_s = 1
+delta_s = 0.5
 
 delay = 1
 infection_step = 0  # default is 0
@@ -47,43 +48,9 @@ estimator = GaussEstimator(n_gauss, N, sampling_dt)
 
 eval_time = (N-1-delay)*sampling_dt  # (N-1)*sampling_dt
 
-def deriv_bound_gauss(k, d, M, delta_s=delta_s):
-    if k==0:
-        return 0.25*np.power(delta_s, d+1)*M/(d+1)
-    return np.power(delta_s, d-k+1)*M*math.comb(d, k-1)
 
-
-def generate_lagrange(d, N=N, sampling_dt=sampling_dt):
-    '''
-    Generate lagrange polynomial to estimate dth derivative error
-    '''
-    num_t_points = d + 1 # number of points for the residual polynomial
-    window_times = np.linspace(0., N*sampling_dt, N, endpoint=False)
-    l_indices = np.arange(N-1-d, N, 1) # indices of the window which we pick for D
-    l_times = window_times[l_indices] # times corresponding to D (s0, ..., sd)
-    lagrange_pols = []
-    for i in range(num_t_points):
-        # build the lagrange polynomial, which is zero at all evaluation samples except one
-        evals = np.zeros(num_t_points)
-        evals[i] = 1.0  # we are choosing the data points that are closest to our evaluation point
-        l_i = Pol.fit(l_times, evals, d)
-        lagrange_pols.append(l_i)
-
-        # to checking that you built the right lagrange polynomial, evaluate it at the relevant points
-        if verbose_lagrange:
-            for j in range(num_t_points):
-                print(f't = {l_times[j]:.3f}, l_{i}(t) = {l_i(l_times[j])}')
-
-        # t = np.linspace(l_times[0], l_times[-1], (l_indices[-1]-l_indices[0])*num_integration_steps)
-        # for i in range(num_t_points):            ## Plotting Lagrange Polynomials
-        #     plt.plot(t, lagrange_pols[i](t))
-        # plt.grid()
-        # plt.show()
-                
-    return lagrange_pols, l_indices
-
-lagrange_pols_d1, l_indices_d1 = generate_lagrange(d=1)
-lagrange_pols_d2, l_indices_d2 = generate_lagrange(d=2)
+lagrange_pols_d1, l_indices_d1 = generate_lagrange(d=1, N=N, sampling_dt=sampling_dt)
+lagrange_pols_d2, l_indices_d2 = generate_lagrange(d=2, N=N, sampling_dt=sampling_dt)
 
 x = np.zeros((n, num_integration_steps))
 y_d = np.zeros((nderivs, num_integration_steps))
@@ -163,11 +130,11 @@ for t in range(0, num_sampling_steps):
                 if j==2:
                     G = np.max(np.abs(estimator.differentiate(t_window, 3)))
                     # Yd = np.max(np.gradient(y_d[2,:], integration_dt)[(t-delay)*integration_per_sample-1:(t-delay+1)*integration_per_sample-1])
-                    y_bound[j, idx] = np.abs(res_pol_d2.deriv(j)(eval_time))+deriv_bound_gauss(k=j, d=2, M=Yd+G)
+                    y_bound[j, idx] = np.abs(res_pol_d2.deriv(j)(eval_time))+deriv_bound(k=j, d=2, M=Yd+G)
                 else:
                     G = np.max(np.abs(estimator.differentiate(t_window, 2)))
                     # Yd = np.max(np.gradient(y_d[1,:], integration_dt)[(t-delay)*integration_per_sample-1:(t-delay+1)*integration_per_sample-1])
-                    y_bound[j, idx] = np.abs(res_pol_d1.deriv(j)(eval_time))+deriv_bound_gauss(k=j, d=1, M=Yd+G)
+                    y_bound[j, idx] = np.abs(res_pol_d1.deriv(j)(eval_time))+deriv_bound(k=j, d=1, M=Yd+G)
             x2_bound[0, idx] = y_bound[0, idx]
             x2_bound[1, idx] = (y_bound[1,idx]+params['c']*y_bound[0,idx])/params['p']
             x2_bound[2, idx] = (y_bound[2,idx] + (params['c']+params['delta'])*y_bound[1,idx] + params['c']*params['delta']*y_bound[0,idx]) / (params['p']*params['beta'])
