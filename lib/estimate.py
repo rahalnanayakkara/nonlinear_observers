@@ -1,15 +1,17 @@
 import numpy as np
 from moving_polyfit.moving_ls import PolyEstimator
-from func import generate_lagrange, deriv_bound
+from lib.func import generate_lagrange, deriv_bound
 
-def get_poly_estimates(t_samples, y_samples, Y_max, window_size, sampling_dt, d, delay, nderivs, num_steps_per_sample):
+def get_poly_estimates(t_samples, y_samples, Y_max, window_size, sampling_dt, d, delay, nderivs, integration_dt):
 
     estimator = PolyEstimator(d=d, N=window_size, dt=sampling_dt)
     lagrange_pols, l_indices = generate_lagrange(d=d, N=window_size, sampling_dt=sampling_dt)
     num_samples = len(y_samples)
+    num_steps_per_sample = int(sampling_dt/integration_dt)
+    num_steps = (num_samples-1)*num_steps_per_sample
 
-    y_hat = np.zeros((nderivs, num_samples+1))
-    y_bound = np.zeros((nderivs, num_samples+1))
+    y_hat = np.zeros((nderivs, num_steps+1))
+    y_bound = np.zeros((nderivs, num_steps+1))
 
     # Sliding window of above size
     for i in range(window_size-1, num_samples):

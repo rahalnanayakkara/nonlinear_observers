@@ -73,7 +73,7 @@ class UIV(ControlAffineODE):
         return x2
     
 
-class UIEV(ControlAffineODE):
+class UEIV(ControlAffineODE):
 
     def __init__(self,  beta=4.71, delta=1.07, p=3.07, c=2.3, k=0.17):
         self.beta = beta
@@ -109,22 +109,24 @@ class UIEV(ControlAffineODE):
         '''
         Computes the output of the system and it's derivatives
         '''
+        rhs = self.rhs(t, x, u)
         y_d = np.empty((self.nderivs,))
-        y_d[0] = x[2]
-        y_d[1] = self.rhs(t, x, u)[2]
-        y_d[2] = self.p_p*self.beta*x[0]*x[2] - (self.c+self.delta)*y_d[1] - self.delta*self.c*x[2]
+        y_d[0] = x[3]
+        y_d[1] = rhs[3]
+        y_d[2] = self.p_p*rhs[2] - self.c*rhs[3]
+        y_d[3] = self.p_p*self.k*rhs[1] - self.p_p*(self.delta+self.c)*rhs[2] + self.c*self.c*rhs[3]
         return y_d
     
-    def invert_output(self, t: float, y_d: np.ndarray, u: np.ndarray = None):
-        '''
-        Function that maps the output and it's derivatives to the system states
-        '''
-        xhat = np.array([
-            (y_d[2]+(self.delta+self.c)*y_d[1]+self.delta*self.c*y_d[0])/(self.p_p*self.beta*y_d[0]),
-            (y_d[1]+self.c*y_d[0])/self.p_p,
-            y_d[0]
-        ])
-        return xhat
+    # def invert_output(self, t: float, y_d: np.ndarray, u: np.ndarray = None):
+    #     '''
+    #     Function that maps the output and it's derivatives to the system states
+    #     '''
+    #     xhat = np.array([
+    #         (y_d[2]+(self.delta+self.c)*y_d[1]+self.delta*self.c*y_d[0])/(self.p_p*self.beta*y_d[0]),
+    #         (y_d[1]+self.c*y_d[0])/self.p_p,
+    #         y_d[0]
+    #     ])
+    #     return xhat
     
 class SIR(ControlAffineODE):
 
