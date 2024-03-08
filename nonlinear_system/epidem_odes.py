@@ -65,6 +65,14 @@ class UIV(ControlAffineODE):
         ])
         return xhat
     
+    def bound_tf(self, y_bound):
+        x2_bound = np.zeros((self.nderivs, y_bound.shape[1]))
+
+        x2_bound[0] = y_bound[0]
+        x2_bound[1] = (y_bound[1]+self.c*y_bound[0])/self.p_p
+        x2_bound[2] = (y_bound[2] + (self.c+self.delta)*y_bound[1] + self.c*self.delta*y_bound[0]) / (self.p_p*self.beta)
+        return x2_bound
+    
     def state_transform(x):
         x2 = np.zeros(x.shape)
         x2[0,:] = x[2,:]
