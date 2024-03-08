@@ -4,7 +4,7 @@ from moving_gauss import GaussEstimator
 from lib.func import generate_lagrange, deriv_bound
 import matplotlib.pyplot as plt
 
-def get_poly_estimates(t_samples, y_samples, Y_max, window_size, sampling_dt, d, delay, nderivs, integration_dt):
+def get_poly_estimates(t_samples, y_samples, Y_max, window_size, sampling_dt, d, delay, nderivs, integration_dt, E=0):
 
     estimator = PolyEstimator(d=d, N=window_size, dt=sampling_dt)
     lagrange_pols, l_indices = generate_lagrange(d=d, N=window_size, sampling_dt=sampling_dt)
@@ -23,12 +23,12 @@ def get_poly_estimates(t_samples, y_samples, Y_max, window_size, sampling_dt, d,
         t = np.linspace(window_size-2-delay, window_size-1-delay, num_steps_per_sample+1)*sampling_dt
         for j in range(nderivs):
             y_hat[j, (i-delay-1)*num_steps_per_sample : (i-delay)*num_steps_per_sample+1] = estimator.differentiate(t, j)
-            y_bound[j, (i-delay-1)*num_steps_per_sample : (i-delay)*num_steps_per_sample+1]  = np.abs(res_pol.deriv(j)(t))+deriv_bound(k=j, d=d, M=Y_max[d+1], delta_s=sampling_dt)
+            y_bound[j, (i-delay-1)*num_steps_per_sample : (i-delay)*num_steps_per_sample+1]  = np.abs(res_pol.deriv(j)(t))+deriv_bound(k=j, d=d, M=Y_max[d+1], delta_s=sampling_dt)+np.sum(np.abs(np.array([pol.deriv(j)(t) for pol in lagrange_pols])), axis=0)*E
             # print(j, d, Y_max[d+1], deriv_bound(k=j, d=d, M=Y_max[d+1], delta_s=sampling_dt))
 
     return y_hat, y_bound
 
-def get_gauss_estimates(t_samples, y_samples, Y_max, window_size, sampling_dt, n, delay, nderivs, integration_dt, d0=-1):
+def get_gauss_estimates(t_samples, y_samples, Y_max, window_size, sampling_dt, n, delay, nderivs, integration_dt, E=0, d0=-1):
 
     num_samples = len(y_samples)
     num_steps_per_sample = int(sampling_dt/integration_dt)
@@ -39,6 +39,9 @@ def get_gauss_estimates(t_samples, y_samples, Y_max, window_size, sampling_dt, n
     
     d_list = list(range(nderivs))   # to estimate kth derivative, we need d=k
     d_list[0] = 1   # for 0th derivative we still need d=1
+    if d0>0:    # if d is specified use it for all derivatives
+        for i in range(len(d_list)):
+            d_list[i] = d0
 
     lagrange_pols = []  # store lagrange polynomials for each case of d
     l_indices = []      # store indices of set D for each case of d
@@ -58,12 +61,13 @@ def get_gauss_estimates(t_samples, y_samples, Y_max, window_size, sampling_dt, n
         t = np.linspace(window_size-2-delay, window_size-1-delay, num_steps_per_sample+1)*sampling_dt
         for j in range(max(d0+2,nderivs+1)):
             G_max[j] = np.max(np.abs(estimator.differentiate(t, j)))
-
+        # Y_max[3] = np.minimum(1.6*np.max(estimator.estimate(t))+0.001, 0.5)
         for j in range(nderivs):
             res_pol = np.array(lagrange_pols[j])@estimator.residuals[l_indices[j]]
             y_hat[j, (i-delay-1)*num_steps_per_sample : (i-delay)*num_steps_per_sample+1] = estimator.differentiate(t, j)
             d = max(j,1) if d0<1 else d0
-            y_bound[j, (i-delay-1)*num_steps_per_sample : (i-delay)*num_steps_per_sample+1]  = np.abs(res_pol.deriv(j)(t))+deriv_bound(k=j, d=d, M=Y_max[d+1]+G_max[d+1], delta_s=sampling_dt)
+            Y_d = np.max(np.abs(Y_max[d+1][i-window_size+1+l_indices[j][0]:i-window_size+1+l_indices[j][-1]])) if isinstance(Y_max[d+1], np.ndarray) else Y_max[d+1]
+            y_bound[j, (i-delay-1)*num_steps_per_sample : (i-delay)*num_steps_per_sample+1]  = np.abs(res_pol.deriv(j)(t))+deriv_bound(k=j, d=d, M=Y_d+G_max[d+1], delta_s=sampling_dt)+np.sum(np.abs(np.array([pol.deriv(j)(t) for pol in lagrange_pols[j]])), axis=0)*E
             # print(j, d, Y_max[d+1]+G_max[d+1], deriv_bound(k=j, d=d, M=Y_max[d+1]+G_max[d+1], delta_s=sampling_dt))
 
     return y_hat, y_bound

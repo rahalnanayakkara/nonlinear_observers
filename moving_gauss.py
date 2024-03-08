@@ -32,7 +32,7 @@ class GaussEstimator:
         self.dt = dt
         self.theta = np.zeros(N)
         self.t0 = 0.0
-        self.sigma =  dt*N/2
+        self.sigma =  dt*N
         self.residuals = np.empty((self.N,))
         self.ti = np.linspace(self.t0, self.t0+self.n*self.dt, self.n, endpoint=False).reshape(-1,1) # centers for the gaussians
 
