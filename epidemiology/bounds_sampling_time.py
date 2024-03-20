@@ -98,10 +98,8 @@ time_p = time-time[ti]
 
 for i in range(n):
     plt.subplot(3,1,i+1)
-    plt.ticklabel_format(axis='y', style='sci', scilimits=(-1,1))
-    formatter = ScalarFormatter(useMathText=True)
-    plt.gca().yaxis.set_major_formatter(formatter)
-    plt.gca().yaxis.get_offset_text().set_position((-0.05, 0))
+    plt.ticklabel_format(axis='y', style='sci', scilimits=(-1,1), useMathText=True)
+    plt.gca().yaxis.get_offset_text().set_position((-0.03, 0))
     # plt.plot(time_p[ti:tf], 1e8*x[i][ti:tf], label="True State")
     # plt.plot(time_p, 1e8*x[i], label="True State")
     for j in range(len(sampling_dts)):
