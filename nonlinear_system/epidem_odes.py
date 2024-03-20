@@ -73,7 +73,26 @@ class UIV(ControlAffineODE):
         x2_bound[2] = (y_bound[2] + (self.c+self.delta)*y_bound[1] + self.c*self.delta*y_bound[0]) / (self.p_p*self.beta)
         return x2_bound
     
-    def state_transform(x):
+    def state_tf_bound(self, x2, x2_bound):
+        x_min = np.zeros(x2.shape)
+        x_max = np.zeros(x2.shape)
+
+        for i in range(x2.shape[0]):
+            x_min[x2.shape[0]-1-i] = x2[i,:]-x2_bound[i,:]
+            x_max[x2.shape[0]-1-i] = x2[i,:]+x2_bound[i,:]
+
+        x_min[0] = np.minimum(x_min[0]/x_min[2], x_min[0]/x_max[2])
+        x_max[0] = np.maximum(x_max[0]/x_min[2], x_max[0]/x_max[2])
+        return x_min, x_max
+    
+    def state_tf(self, x2):
+        x = np.zeros(x2.shape)
+        x[2] = x2[0]
+        x[1] = x2[1]
+        x[0] = x2[2]/x2[0]
+        return x
+        
+    def state_transform(self, x):
         x2 = np.zeros(x.shape)
         x2[0,:] = x[2,:]
         x2[1,:] = x[1,:]
