@@ -8,6 +8,7 @@ pygame.init()
 
 # Screen dimensions
 WIDTH, HEIGHT = 800.0, 600.0
+FPS = 30
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Animation")
 
@@ -19,6 +20,9 @@ YELLOW = (255, 255, 150)
 
 # Car Properties
 axle_sep = 60.0
+
+steering_limit = 45  # Maximum steering angle in degrees
+speed_limit = 7  # Maximum speed of car allowed
 wheel_sep = 0.6*axle_sep
 
 wheel_dep = wheel_sep/4  # how fat will the wheels be
@@ -41,10 +45,12 @@ car_rf = car_rr + np.array([car_len, 0.15*car_width])
 car_lf = car_lr + np.array([car_len, -0.15*car_width])
 car_pts = np.vstack([car_rr, car_lr, car_lf, car_rf])
 
+
 def blit_rotate_center(surf, image, topleft, angle):
     rotated_image = pygame.transform.rotate(image, angle)
     new_rect = rotated_image.get_rect(center=image.get_rect(topleft=topleft).center)
     surf.blit(rotated_image, new_rect.topleft)
+
 
 # Sprite class
 class CarSprite(pygame.sprite.Sprite):
@@ -65,11 +71,11 @@ class CarSprite(pygame.sprite.Sprite):
 
         wheel_fl = pygame.Surface((wheel_dep, wheel_diam), pygame.SRCALPHA)
         wheel_fl.fill(BLACK)
-        blit_rotate_center(image, wheel_fl, (car_width - wheel_sep/2. - wheel_dep/2., car_len - axle_sep/2 - wheel_diam/2), self.state[4])
+        blit_rotate_center(image, wheel_fl, (car_width - wheel_sep/2. - wheel_dep/2., car_len - axle_sep/2 - wheel_diam/2), math.degrees(self.state[4]))
 
         wheel_fr = pygame.Surface((wheel_dep, wheel_diam), pygame.SRCALPHA)
         wheel_fr.fill(BLACK)
-        blit_rotate_center(image, wheel_fr, (car_width + wheel_sep/2. - wheel_dep/2., car_len - axle_sep/2 - wheel_diam/2), self.state[4])
+        blit_rotate_center(image, wheel_fr, (car_width + wheel_sep/2. - wheel_dep/2., car_len - axle_sep/2 - wheel_diam/2), math.degrees(self.state[4]))
 
         pygame.draw.rect(image, BLACK, (car_width - wheel_sep/2. - wheel_dep/2., car_len + axle_sep/2 - wheel_diam/2, wheel_dep, wheel_diam))
         pygame.draw.rect(image, BLACK, (car_width + wheel_sep/2. - wheel_dep/2., car_len + axle_sep/2 - wheel_diam/2, wheel_dep, wheel_diam))
@@ -77,25 +83,30 @@ class CarSprite(pygame.sprite.Sprite):
 
     def update(self, keys):
         if keys[pygame.K_UP]:
-            self.state[3] += 0.1
+            if self.state[3] < speed_limit:
+                self.state[3] += 0.1
         if keys[pygame.K_DOWN]:
-            self.state[3] -= 0.1
+            if self.state[3] > -speed_limit:
+                self.state[3] -= 0.1
         if keys[pygame.K_LEFT]:
-            self.state[4] += 0.5
+            if self.state[4] < math.radians(steering_limit):
+                self.state[4] += math.radians(2)
         if keys[pygame.K_RIGHT]:
-            self.state[4] -= 0.5
+            if self.state[4] > -math.radians(steering_limit):
+                self.state[4] -= math.radians(2)
 
-        self.image = pygame.transform.rotate(self.create_image(), self.state[2])
+        self.image = pygame.transform.rotate(self.create_image(), math.degrees(self.state[2]))
         self.rect = self.image.get_rect(center=self.rect.center)
 
-        self.state[0] -= self.state[3] * math.sin(math.radians(self.state[2]))
-        self.state[1] -= self.state[3] * math.cos(math.radians(self.state[2]))
-        self.state[2] += 100* self.state[3] * math.tan(math.radians(self.state[4])) / axle_sep
+        self.state[0] -= self.state[3] * math.sin(self.state[2])
+        self.state[1] -= self.state[3] * math.cos(self.state[2])
+        self.state[2] += self.state[3] * math.tan(self.state[4]) / axle_sep
 
         self.rect.x = self.state[0] - self.image.get_rect().width/2
         self.rect.y = self.state[1] - self.image.get_rect().height/2
 
-        # print(self.rect.y, self.rect.x, self.state[3] * math.cos(math.radians(self.state[2])), self.state[3] * math.sin(math.radians(self.state[2])))
+        print(self.rect.x, self.rect.y)
+
 
 # Clock to control the frame rate
 clock = pygame.time.Clock()
@@ -106,7 +117,6 @@ all_sprites = pygame.sprite.Group(sprite)
 
 # Clock to control the frame rate
 clock = pygame.time.Clock()
-FPS = 60
 
 # Main loop
 running = True
