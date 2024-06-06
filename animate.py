@@ -2,7 +2,7 @@ import pygame
 import sys
 import numpy as np
 import math
-
+from numpy.polynomial import Polynomial as P
 from nonlinear_system.sample_odes import AckermanModel
 from moving_polyfit.moving_ls import MultiDimPolyEstimator
 
@@ -37,6 +37,7 @@ font = pygame.font.Font(None, font_size)
 
 # Car Properties
 axle_sep = 60.0
+noise_mag = 1
 
 steering_limit = 45  # Maximum steering angle in degrees
 speed_limit = 7  # Maximum speed of car allowed
@@ -68,6 +69,54 @@ ode_m = ODE.m  # control input dimension
 ode_p = ODE.p  # output dimension
 est_d = 2
 poly_estimator = MultiDimPolyEstimator(ode_p, est_d, window_length, sampling_dt)
+
+num_t_points = est_d + 1
+deltas = window_length//num_t_points
+l_bound = np.zeros((window_length, est_d, deltas))
+verbose_lagrange = False  # to see computation details of lagrange polynomial construction/derivatives
+
+for delta in range(1, deltas+1):
+    # for index slicing into the time arrays
+    maxstart = window_length-1-num_t_points*delta
+    minstart = 0
+    start = np.clip((window_length-1) - delay - delta*(num_t_points//2), minstart, maxstart)
+    l_indices = np.full((num_t_points,), 1)
+    for i in range(num_t_points):
+        l_indices[i] = start + i*delta
+    l_times = window_times[l_indices]  # pull the subset of chosen time indices
+
+    for i in range(num_t_points):
+        # build the lagrange polynomial, which is zero at all evaluation samples except one
+        evals = np.zeros(num_t_points)
+        evals[i] = 1.0  # we are choosing the data points that are closest to our evaluation point
+        l_i = P.fit(l_times, evals, est_d)
+
+        # to checking that you built the right lagrange polynomial, evaluate it at the relevant points
+        if verbose_lagrange:
+            for j in range(num_t_points):
+                print(f't = {l_times[j]:.3f}, l_i(t) = {l_i(l_times[j])}')
+
+        # for every derivative that we estimate, compute this lagrange polynomial's derivative at the estimation time
+        for q in range(est_d):
+            l_bound[l_indices[i], q, delta-1] = l_i.deriv(q)(eval_time)  # coefficient for i-th residual in bound
+            if verbose_lagrange:
+                print(f'|l_{l_indices[i]}^({q})(t)|: {l_bound[l_indices[i], q, delta-1]}')
+
+
+M = np.ones((ode_p,))
+residual = np.zeros((ode_p, window_length))
+cand_bounds = np.zeros((ode_p, est_d, deltas))
+bounds = np.zeros((ode_p, est_d))
+xhat_upper = np.zeros(ode_n)
+xhat_lower = np.zeros(ode_n)
+
+global_bounds = np.empty((ode_p, est_d))
+for q in range(est_d):
+    for r in range(ode_p):
+        global_bounds[r, q] = (M[r]/(np.math.factorial(est_d+1)))*(np.sqrt(window_length**2+window_length))*((window_length*sampling_dt)**(est_d+1))
+        global_bounds *= np.max(l_bound[:, q])
+        global_bounds[r, q] += (M[r]/(np.math.factorial(est_d-q+1)))*(((q+1)*sampling_dt)**(est_d-q+1))
+        comb = np.math.factorial(est_d)//(np.math.factorial(est_d-q+1)*np.math.factorial(max(0, q-1)))
 
 
 def blit_rotate_center(surf, image, topleft, angle):
@@ -143,6 +192,7 @@ class CarSprite(pygame.sprite.Sprite):
         self.op_data[0, -1] = self.state[0]
         self.op_data[1, -1] = self.state[1]
         poly_estimator.fit(self.op_data)
+        residual = poly_estimator.residuals
 
         for i in range(est_d+1):
             self.yhat[:, i] = poly_estimator.differentiate(eval_time, i)
@@ -153,6 +203,26 @@ class CarSprite(pygame.sprite.Sprite):
             self.xhat[3] *= -1
         self.xhat[2] = -math.pi/2 - self.xhat[2]
         self.xhat[4] *= -1
+
+        # compute a bound on derivative estimation error from residuals
+        for q in range(est_d):
+            for r in range(ode_p):
+                noise_vector = np.ones(window_length,)*noise_mag
+                # noise_vector = np.abs(noise_samples[r, t-N+1:t+1])
+                for delta in range(deltas):
+                    cand_bounds[r, q, delta] = np.abs(np.dot(residual[r, :], l_bound[:, q, delta]))
+                    cand_bounds[r, q, delta] += np.dot(noise_vector, np.abs(l_bound[:, q, delta]))
+                    cand_bounds[r, q, delta] += M[r]*comb*(((delta+1)*sampling_dt)**(est_d-q+1))
+        bounds = np.min(cand_bounds, axis=-1)
+
+        xhat_upper[0] = self.xhat[0] + bounds[0, 0]
+        xhat_lower[0] = self.xhat[0] - bounds[0, 0]
+
+        xhat_upper[1] = self.xhat[1] + bounds[1, 0]
+        xhat_lower[1] = self.xhat[1] - bounds[1, 0]
+
+        # xhat_upper[2] = np.arctan2(yhat)
+        
 
 
 def draw_text(text_string, top, left):
