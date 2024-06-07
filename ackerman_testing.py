@@ -143,6 +143,7 @@ y_derivs = np.empty((p, ODE.nderivs, num_integration_steps))
 residual = np.empty((p, N, num_sampling_steps))
 cand_bounds = np.zeros((p, d, num_sampling_steps, deltas))
 bounds = np.zeros((p, d, num_sampling_steps))
+print(bounds.shape, "d is", d)
 xhat_upper = np.zeros((n, num_sampling_steps))
 xhat_lower = np.zeros((n, num_sampling_steps))
 
@@ -275,7 +276,9 @@ for t in range(N-1-delay, num_sampling_steps):
                     ub = max(ub, val)
     xhat_lower[4, t] = lb
     xhat_upper[4, t] = ub
-
+    print(yhat_poly[:, :4, t].shape, bounds[:, :, t].shape, yhat_poly[:, :4, t].shape, bounds[:, :, t].shape)
+    break
+exit()
 # SAVING THE DATA HERE
 savedata = {'x': x_samples,
             'xhat': xhat_poly,

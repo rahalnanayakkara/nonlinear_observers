@@ -69,7 +69,7 @@ ODE = AckermanModel(axle_sep, wheel_sep)
 ode_n = ODE.n  # system state dimension
 ode_m = ODE.m  # control input dimension
 ode_p = ODE.p  # output dimension
-est_d = 2
+est_d = 3
 poly_estimator = MultiDimPolyEstimator(ode_p, est_d, window_length, sampling_dt)
 
 num_t_points = est_d + 1
@@ -201,8 +201,8 @@ class CarSprite(pygame.sprite.Sprite):
 
         self.xhat = ODE.invert_position(0, self.yhat, self.u)
         self.xhat[3] /= FPS
-        if self.state[3] < 0:
-            self.xhat[3] *= -1
+        # if self.state[3] < 0:
+        #     self.xhat[3] *= -1
         self.xhat[2] = -math.pi/2 - self.xhat[2]
         self.xhat[4] *= -1
 
@@ -223,7 +223,33 @@ class CarSprite(pygame.sprite.Sprite):
         xhat_upper[1] = self.xhat[1] + bounds[1, 0]
         xhat_lower[1] = self.xhat[1] - bounds[1, 0]
 
-        # xhat_upper[2] = np.arctan2(yhat)       
+        xhat_upper[2] = -math.pi/2 - np.arctan2(self.yhat[1, 1] + bounds[1, 1], self.yhat[0, 1] - bounds[0, 1])
+        xhat_lower[2] = -math.pi/2 - np.arctan2(self.yhat[1, 1] - bounds[1, 1], self.yhat[0, 1] + bounds[0, 1])
+
+        xhat_upper[3] = self.xhat[3] + np.linalg.norm(bounds[:2, 1])/FPS/3
+        xhat_lower[3] = self.xhat[3] - np.linalg.norm(bounds[:2, 1])/FPS/3
+
+        # this step does an exhaustive search through upper and lower bound combinations for the last component
+        # it's not ideal but requires 16 computations in this case
+        yhat_poly_ul = [self.yhat[:, :3] - bounds[:, :], self.yhat[:, :3] + bounds[:, :]]
+        lb = np.inf
+        ub = -np.inf
+        for i in range(2):
+            for j in range(2):
+                for k in range(2):
+                    for l in range(2):
+                        test = self.yhat[:, :].copy()
+                        test[0, 1] = yhat_poly_ul[i][0, 1].copy()
+                        test[1, 1] = yhat_poly_ul[j][1, 1].copy()
+                        test[0, 2] = yhat_poly_ul[k][0, 2].copy()
+                        test[1, 2] = yhat_poly_ul[l][1, 2].copy()
+                        val = ODE.invert_position(0.0, test, self.u[:, :])[4]
+                        lb = min(lb, val)
+                        ub = max(ub, val)
+        xhat_lower[4] = lb
+        xhat_upper[4] = ub
+        # i = 4
+        # print(self.xhat[i], xhat_lower[i], xhat_upper[i])
 
 
 def draw_text(text_string, top, left):
@@ -255,13 +281,14 @@ def draw_speed_bar(speed, speed_est, speed_lower, speed_upper):
     # draw_text(str(0), BAR_TOP+BAR_WIDTH+TXT_OFFSET, BAR_LEFT+BAR_LEN/2-TXT_OFFSET)
 
 
-def draw_steering_circle(angle, angle_est, angle_bound):
+def draw_steering_circle(angle, angle_est, angle_lower, angle_upper):
     CENTER_X = 120
     CENTER_Y = 160
     RAD = 80
     arrow_tip = (CENTER_X-RAD*math.sin(angle_est), CENTER_Y-RAD*math.cos(angle_est))
     # pygame.draw.circle(screen, BLACK, (CENTER_X, CENTER_Y), RAD, width=1)
-    pygame.draw.polygon(screen, YELLOW, [(CENTER_X, CENTER_Y), (arrow_tip[0]-RAD*math.tan(angle_bound)*math.cos(angle_est), arrow_tip[1]+RAD*math.tan(angle_bound)*math.sin(angle_est)), (arrow_tip[0]+RAD*math.tan(angle_bound)*math.cos(angle_est), arrow_tip[1]-RAD*math.tan(angle_bound)*math.sin(angle_est))])
+    # pygame.draw.polygon(screen, YELLOW, [(CENTER_X, CENTER_Y), (arrow_tip[0]-RAD*math.tan(angle_bound)*math.cos(angle_est), arrow_tip[1]+RAD*math.tan(angle_bound)*math.sin(angle_est)), (arrow_tip[0]+RAD*math.tan(angle_bound)*math.cos(angle_est), arrow_tip[1]-RAD*math.tan(angle_bound)*math.sin(angle_est))])
+    pygame.draw.polygon(screen, YELLOW, [(CENTER_X, CENTER_Y), (CENTER_X-RAD*math.sin(angle_lower), CENTER_Y-RAD*math.cos(angle_lower)), (CENTER_X-RAD*math.sin(angle_upper), CENTER_Y-RAD*math.cos(angle_upper))])
     pygame.draw.arc(screen, BLACK, ((CENTER_X-RAD, CENTER_Y-RAD), (2*RAD, 2*RAD)), 0, math.pi)
     pygame.draw.line(screen, BLACK, (CENTER_X-RAD, CENTER_Y), (CENTER_X+RAD, CENTER_Y))
     pygame.draw.line(screen, GREY, (CENTER_X, CENTER_Y), (CENTER_X, CENTER_Y-RAD))
@@ -272,10 +299,12 @@ def draw_steering_circle(angle, angle_est, angle_bound):
     draw_text(str(-90), CENTER_Y-10, CENTER_X-RAD-25)
 
 
-def draw_heading(sprite, angle_bound):
-    heading_est = sprite.xhat[2]
-    arrow_tip = (sprite.state[0]-ARROW_LEN*math.sin(heading_est), sprite.state[1]-ARROW_LEN*math.cos(heading_est))
-    pygame.draw.polygon(screen, YELLOW, [(sprite.state[0], sprite.state[1]), (arrow_tip[0]-ARROW_LEN*math.tan(angle_bound)*math.cos(heading_est), arrow_tip[1]+ARROW_LEN*math.tan(angle_bound)*math.sin(heading_est)), (arrow_tip[0]+ARROW_LEN*math.tan(angle_bound)*math.cos(heading_est), arrow_tip[1]-ARROW_LEN*math.tan(angle_bound)*math.sin(heading_est))])
+def draw_heading(sprite, angle_lower, angle_upper):
+    # heading_est = sprite.xhat[2]
+    # arrow_tip = (sprite.state[0]-ARROW_LEN*math.sin(heading_est), sprite.state[1]-ARROW_LEN*math.cos(heading_est))
+    # pygame.draw.polygon(screen, YELLOW, [(sprite.state[0], sprite.state[1]), (arrow_tip[0]-ARROW_LEN*math.tan(angle_lower)*math.cos(heading_est), arrow_tip[1]+ARROW_LEN*math.tan(angle_lower)*math.sin(heading_est)), (arrow_tip[0]+ARROW_LEN*math.tan(angle_upper)*math.cos(heading_est), arrow_tip[1]-ARROW_LEN*math.tan(angle_upper)*math.sin(heading_est))])
+    pygame.draw.polygon(screen, YELLOW, [(sprite.state[0], sprite.state[1]), (sprite.state[0]-2*ARROW_LEN*math.sin(angle_lower), sprite.state[1]-2*ARROW_LEN*math.cos(angle_lower)), (sprite.state[0]-2*ARROW_LEN*math.sin(angle_upper), sprite.state[1]-2*ARROW_LEN*math.cos(angle_upper))])
+    # pygame.draw.polygon(screen, YELLOW, [(sprite.state[0], sprite.state[1]), (sprite.state[0]-ARROW_LEN*math.sin(angle_lower)/math.cos(heading_est-angle_lower), sprite.state[1]-ARROW_LEN*math.cos(angle_lower)/math.cos(heading_est-angle_lower)), (sprite.state[0]-ARROW_LEN*math.sin(angle_upper)/math.cos(heading_est-angle_upper), sprite.state[1]-ARROW_LEN*math.cos(angle_upper)/math.cos(heading_est-angle_upper))])
 
 
 # Clock to control the frame rate
@@ -299,15 +328,15 @@ while running:
     all_sprites.update(keys)
 
     screen.fill(WHITE)
-    draw_heading(sprite, math.pi/6)
+    draw_heading(sprite, xhat_lower[2], xhat_upper[2])
     all_sprites.draw(screen)
     pygame.draw.line(screen, RED, (sprite.state[0], sprite.state[1]), (sprite.state[0]-ARROW_LEN*math.sin(sprite.state[2]), sprite.state[1]-ARROW_LEN*math.cos(sprite.state[2])), width=2)
     pygame.draw.line(screen, GREEN, (sprite.state[0], sprite.state[1]), (sprite.state[0]-ARROW_LEN*math.sin(sprite.xhat[2]), sprite.state[1]-ARROW_LEN*math.cos(sprite.xhat[2])), width=2)
     # pygame.draw.circle(screen, RED, (sprite.xhat[0], sprite.xhat[1]), 10)
     # draw_speed_bar(sprite.state[3])
 
-    draw_speed_bar(sprite.state[3], sprite.xhat[3], sprite.xhat[3]-1, sprite.xhat[3]+1)
-    draw_steering_circle(sprite.state[4], sprite.xhat[4], math.pi/6)
+    draw_speed_bar(sprite.state[3], sprite.xhat[3], xhat_lower[3], xhat_upper[3])
+    draw_steering_circle(sprite.state[4], sprite.xhat[4], xhat_lower[4], xhat_upper[4])
 
     pygame.display.flip()
     clock.tick(FPS)
