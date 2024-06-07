@@ -29,7 +29,9 @@ GREY = (100, 100, 100)
 BLUE = (100, 100, 255)
 YELLOW = (255, 255, 150)
 RED = (255, 0, 0)
-GREEN = (0, 255, 0)
+GREEN = (0, 150, 0)
+
+ARROW_LEN = 100
 
 # Font Settings
 font_size = 25
@@ -221,8 +223,7 @@ class CarSprite(pygame.sprite.Sprite):
         xhat_upper[1] = self.xhat[1] + bounds[1, 0]
         xhat_lower[1] = self.xhat[1] - bounds[1, 0]
 
-        # xhat_upper[2] = np.arctan2(yhat)
-        
+        # xhat_upper[2] = np.arctan2(yhat)       
 
 
 def draw_text(text_string, top, left):
@@ -233,36 +234,48 @@ def draw_text(text_string, top, left):
     screen.blit(txt_surf, txt_rect)
 
 
-def draw_speed_bar(speed, speed_est):
+def draw_speed_bar(speed, speed_est, speed_lower, speed_upper):
     BAR_TOP = 10
     BAR_LEFT = 20
     BAR_LEN = 200
     BAR_WIDTH = 20
     TXT_OFFSET = 5
-    speed_pos = speed/speed_limit*BAR_LEN+BAR_LEFT
-    speed_pos_est = speed_est/speed_limit*BAR_LEN+BAR_LEFT
+    SPEED_MAX = 10
+    speed_pos = speed/SPEED_MAX*BAR_LEN+BAR_LEFT
+    speed_pos_est = speed_est/SPEED_MAX*BAR_LEN+BAR_LEFT
+    speed_lower_pos = speed_lower/SPEED_MAX*BAR_LEN+BAR_LEFT
+    speed_width = speed_upper/SPEED_MAX*BAR_LEN+BAR_LEFT - max(BAR_LEFT, speed_lower_pos)
+    pygame.draw.rect(screen, YELLOW, (max(BAR_LEFT, speed_lower_pos), BAR_TOP, speed_width, BAR_WIDTH))
     pygame.draw.rect(screen, BLACK, (BAR_LEFT, BAR_TOP, BAR_LEN, BAR_WIDTH), width=1)
     # pygame.draw.line(screen, GREY, (BAR_LEFT+BAR_LEN/2, BAR_TOP), (BAR_LEFT+BAR_LEN/2, BAR_TOP+BAR_WIDTH))
     pygame.draw.line(screen, RED, (speed_pos, BAR_TOP), (speed_pos, BAR_TOP+BAR_WIDTH), width=2)
     pygame.draw.line(screen, GREEN, (speed_pos_est, BAR_TOP), (speed_pos_est, BAR_TOP+BAR_WIDTH), width=2)
     draw_text(str(0), BAR_TOP+BAR_WIDTH+TXT_OFFSET, BAR_LEFT-TXT_OFFSET)
-    draw_text(str(speed_limit), BAR_TOP+BAR_WIDTH+TXT_OFFSET, BAR_LEN+BAR_LEFT-TXT_OFFSET)
+    draw_text(str(SPEED_MAX), BAR_TOP+BAR_WIDTH+TXT_OFFSET, BAR_LEN+BAR_LEFT-TXT_OFFSET)
     # draw_text(str(0), BAR_TOP+BAR_WIDTH+TXT_OFFSET, BAR_LEFT+BAR_LEN/2-TXT_OFFSET)
 
 
-def draw_steering_circle(angle, angle_est):
+def draw_steering_circle(angle, angle_est, angle_bound):
     CENTER_X = 120
     CENTER_Y = 160
     RAD = 80
+    arrow_tip = (CENTER_X-RAD*math.sin(angle_est), CENTER_Y-RAD*math.cos(angle_est))
     # pygame.draw.circle(screen, BLACK, (CENTER_X, CENTER_Y), RAD, width=1)
+    pygame.draw.polygon(screen, YELLOW, [(CENTER_X, CENTER_Y), (arrow_tip[0]-RAD*math.tan(angle_bound)*math.cos(angle_est), arrow_tip[1]+RAD*math.tan(angle_bound)*math.sin(angle_est)), (arrow_tip[0]+RAD*math.tan(angle_bound)*math.cos(angle_est), arrow_tip[1]-RAD*math.tan(angle_bound)*math.sin(angle_est))])
     pygame.draw.arc(screen, BLACK, ((CENTER_X-RAD, CENTER_Y-RAD), (2*RAD, 2*RAD)), 0, math.pi)
     pygame.draw.line(screen, BLACK, (CENTER_X-RAD, CENTER_Y), (CENTER_X+RAD, CENTER_Y))
     pygame.draw.line(screen, GREY, (CENTER_X, CENTER_Y), (CENTER_X, CENTER_Y-RAD))
     pygame.draw.line(screen, RED, (CENTER_X, CENTER_Y), (CENTER_X-RAD*math.sin(angle), CENTER_Y-RAD*math.cos(angle)), width=2)
-    pygame.draw.line(screen, GREEN, (CENTER_X, CENTER_Y), (CENTER_X-RAD*math.sin(angle_est), CENTER_Y-RAD*math.cos(angle_est)), width=2)
+    pygame.draw.line(screen, GREEN, (CENTER_X, CENTER_Y), arrow_tip, width=2)
     draw_text(str(0), CENTER_Y-RAD-15, CENTER_X-5)
     draw_text(str(90), CENTER_Y-10, CENTER_X+RAD+5)
     draw_text(str(-90), CENTER_Y-10, CENTER_X-RAD-25)
+
+
+def draw_heading(sprite, angle_bound):
+    heading_est = sprite.xhat[2]
+    arrow_tip = (sprite.state[0]-ARROW_LEN*math.sin(heading_est), sprite.state[1]-ARROW_LEN*math.cos(heading_est))
+    pygame.draw.polygon(screen, YELLOW, [(sprite.state[0], sprite.state[1]), (arrow_tip[0]-ARROW_LEN*math.tan(angle_bound)*math.cos(heading_est), arrow_tip[1]+ARROW_LEN*math.tan(angle_bound)*math.sin(heading_est)), (arrow_tip[0]+ARROW_LEN*math.tan(angle_bound)*math.cos(heading_est), arrow_tip[1]-ARROW_LEN*math.tan(angle_bound)*math.sin(heading_est))])
 
 
 # Clock to control the frame rate
@@ -286,15 +299,15 @@ while running:
     all_sprites.update(keys)
 
     screen.fill(WHITE)
+    draw_heading(sprite, math.pi/6)
     all_sprites.draw(screen)
-
-    pygame.draw.line(screen, RED, (sprite.state[0], sprite.state[1]), (sprite.state[0]-80*math.sin(sprite.state[2]), sprite.state[1]-80*math.cos(sprite.state[2])), width=2)
-    pygame.draw.line(screen, GREEN, (sprite.state[0], sprite.state[1]), (sprite.state[0]-80*math.sin(sprite.xhat[2]), sprite.state[1]-80*math.cos(sprite.xhat[2])), width=2)
+    pygame.draw.line(screen, RED, (sprite.state[0], sprite.state[1]), (sprite.state[0]-ARROW_LEN*math.sin(sprite.state[2]), sprite.state[1]-ARROW_LEN*math.cos(sprite.state[2])), width=2)
+    pygame.draw.line(screen, GREEN, (sprite.state[0], sprite.state[1]), (sprite.state[0]-ARROW_LEN*math.sin(sprite.xhat[2]), sprite.state[1]-ARROW_LEN*math.cos(sprite.xhat[2])), width=2)
     # pygame.draw.circle(screen, RED, (sprite.xhat[0], sprite.xhat[1]), 10)
     # draw_speed_bar(sprite.state[3])
 
-    draw_speed_bar(sprite.state[3], sprite.xhat[3])
-    draw_steering_circle(sprite.state[4], sprite.xhat[4])
+    draw_speed_bar(sprite.state[3], sprite.xhat[3], sprite.xhat[3]-1, sprite.xhat[3]+1)
+    draw_steering_circle(sprite.state[4], sprite.xhat[4], math.pi/6)
 
     pygame.display.flip()
     clock.tick(FPS)
