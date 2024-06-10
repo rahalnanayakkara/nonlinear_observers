@@ -4,6 +4,7 @@ import numpy as np
 import math
 from numpy.polynomial import Polynomial as P
 from nonlinear_system.sample_odes import AckermanModel
+from nonlinear_system.ct_system import ContinuousTimeSystem
 from moving_polyfit.moving_ls import MultiDimPolyEstimator
 
 # Initialize Pygame
@@ -18,7 +19,9 @@ pygame.display.set_caption("Animation")
 # Estimator Parameters
 window_length = 10  # Number of samples
 delay = 1
+integrations_per_sample = 10
 sampling_dt = 1.0/FPS
+integration_dt = sampling_dt/integrations_per_sample
 eval_time = (window_length-1-delay)*sampling_dt
 window_times = np.linspace(0., window_length*sampling_dt, window_length, endpoint=False)
 
@@ -39,31 +42,19 @@ font = pygame.font.Font(None, font_size)
 
 # Car Properties
 axle_sep = 60.0
-noise_mag = 1
+noise_mag = 0
 
 steering_limit = 45  # Maximum steering angle in degrees
-speed_limit = 7  # Maximum speed of car allowed
+speed_limit = 500  # Maximum speed of car allowed
 wheel_sep = 0.6*axle_sep
 
 wheel_dep = wheel_sep/4  # how fat will the wheels be
 wheel_diam = wheel_dep*3.0  # how big are they in diameter
 
-
-rr_anchor = (0.0 - wheel_diam/2., 0.0 - wheel_sep/2. - wheel_dep/2.)
-lr_anchor = (0.0 - wheel_diam/2., 0.0 + wheel_sep/2. - wheel_dep/2.)
-rf_anchor = (0.0 + axle_sep - wheel_diam/2., 0.0 - wheel_sep/2. - wheel_dep/2.)
-lf_anchor = (0.0 + axle_sep - wheel_diam/2., 0.0 + wheel_sep/2. - wheel_dep/2.)
-
 base_LR_pad = wheel_dep/2.0
 base_UD_pad = -wheel_dep/4.0
-caranchor = (0.0 - wheel_diam/2.0 - base_LR_pad, 0.0 - wheel_sep/2.0 - wheel_dep/2.0 - base_UD_pad)
 car_len = axle_sep + wheel_diam + base_LR_pad*2.0
 car_width = wheel_sep + base_UD_pad*2.0 + wheel_dep
-car_rr = np.array(caranchor)
-car_lr = car_rr + np.array([0.0, car_width])
-car_rf = car_rr + np.array([car_len, 0.15*car_width])
-car_lf = car_lr + np.array([car_len, -0.15*car_width])
-car_pts = np.vstack([car_rr, car_lr, car_lf, car_rf])
 
 ODE = AckermanModel(axle_sep, wheel_sep)
 ode_n = ODE.n  # system state dimension
@@ -106,6 +97,8 @@ for delta in range(1, deltas+1):
 
 
 M = np.ones((ode_p,))
+M[0] = 200000
+M[1] = 200000
 residual = np.zeros((ode_p, window_length))
 cand_bounds = np.zeros((ode_p, est_d, deltas))
 bounds = np.zeros((ode_p, est_d))
@@ -135,13 +128,26 @@ class CarSprite(pygame.sprite.Sprite):
         self.center = center
         self.image = self.create_image()
         self.rect = self.image.get_rect(center=self.center)
-        self.state[0] = self.rect.x + self.image.get_rect().width/2
-        self.state[1] = self.rect.y + self.image.get_rect().height/2
+        self.offset_x = self.rect.x + self.image.get_rect().width/2
+        self.offset_y = self.rect.y + self.image.get_rect().height/2
+        self.x, self.y = self.offset_x, self.offset_y
+        self.x_est, self.y_est = self.offset_x, self.offset_y
+        self.h_est = 0
+        self.h = 0
+        # self.state[0] = self.rect.x + self.image.get_rect().width/2
+        # self.state[1] = self.rect.y + self.image.get_rect().height/2
+        self.state[2] = math.pi/2
+        self.sys = ContinuousTimeSystem(ODE, x0=self.state, dt=integration_dt, solver='RK45')
 
         self.op_data = np.vstack((np.ones(window_length, dtype=np.float32)*self.state[0], np.ones(window_length, dtype=np.float32)*self.state[1]))
         self.yhat = np.zeros((2, est_d+1))
         self.xhat = np.zeros(ode_n)
         self.u = np.zeros((2, 1))
+
+    def convert_coordinates(self, est=False):
+        if est:
+            return self.offset_x+self.xhat[0], self.offset_y-self.xhat[1], self.xhat[2]-math.pi/2
+        return self.offset_x+self.state[0], self.offset_y-self.state[1], self.state[2]-math.pi/2
 
     def create_image(self):
         max_width = 2*car_width
@@ -165,32 +171,35 @@ class CarSprite(pygame.sprite.Sprite):
         self.u[:, :] = 0
         if keys[pygame.K_UP]:
             if self.state[3] < speed_limit:
-                self.u[0, 0] = 0.1
+                self.u[0, 0] = 100
         if keys[pygame.K_DOWN]:
-            if self.state[3] > 0:
-                self.u[0, 0] = -0.1
+            if self.state[3] > 100:
+                self.u[0, 0] = -100
         if keys[pygame.K_LEFT]:
             if self.state[4] < math.radians(steering_limit):
-                self.u[1, 0] = math.radians(2)
+                self.u[1, 0] = math.radians(50)
         if keys[pygame.K_RIGHT]:
             if self.state[4] > -math.radians(steering_limit):
-                self.u[1, 0] = -math.radians(2)
+                self.u[1, 0] = -math.radians(50)
 
-        self.state[3] += self.u[0, 0]
-        self.state[4] += self.u[1, 0]
-        self.op_data = np.roll(self.op_data, -1)
+        # self.state[3] += self.u[0, 0]
+        # self.state[4] += self.u[1, 0]
+        # self.state[0] += self.state[3] * math.cos(self.state[2])
+        # self.state[1] += self.state[3] * math.sin(self.state[2])
+        # self.state[2] += self.state[3] * math.tan(self.state[4]) / axle_sep
+        for _ in range(integrations_per_sample):
+            self.sys.step(self.u[:, 0])
+        self.state = self.sys.x
 
-        self.image = pygame.transform.rotate(self.create_image(), math.degrees(self.state[2]))
+        self.x, self.y, self.h = self.convert_coordinates()
+        self.image = pygame.transform.rotate(self.create_image(), math.degrees(self.h))
         self.rect = self.image.get_rect(center=self.rect.center)
 
-        self.state[0] -= self.state[3] * math.sin(self.state[2])
-        self.state[1] -= self.state[3] * math.cos(self.state[2])
-        self.state[2] += self.state[3] * math.tan(self.state[4]) / axle_sep
-
-        self.rect.x = self.state[0] - self.image.get_rect().width/2
-        self.rect.y = self.state[1] - self.image.get_rect().height/2
+        self.rect.x = self.x - self.image.get_rect().width/2
+        self.rect.y = self.y - self.image.get_rect().height/2
 
         # Poly Estimator
+        self.op_data = np.roll(self.op_data, -1)
         self.op_data[0, -1] = self.state[0]
         self.op_data[1, -1] = self.state[1]
         poly_estimator.fit(self.op_data)
@@ -200,11 +209,9 @@ class CarSprite(pygame.sprite.Sprite):
             self.yhat[:, i] = poly_estimator.differentiate(eval_time, i)
 
         self.xhat = ODE.invert_position(0, self.yhat, self.u)
-        self.xhat[3] /= FPS
-        # if self.state[3] < 0:
-        #     self.xhat[3] *= -1
-        self.xhat[2] = -math.pi/2 - self.xhat[2]
-        self.xhat[4] *= -1
+        if math.isnan(self.xhat[4]):
+            self.xhat[4] = 0
+        self.x_est, self.y_est, self.h_est = self.convert_coordinates(est=True)
 
         # compute a bound on derivative estimation error from residuals
         for q in range(est_d):
@@ -223,11 +230,12 @@ class CarSprite(pygame.sprite.Sprite):
         xhat_upper[1] = self.xhat[1] + bounds[1, 0]
         xhat_lower[1] = self.xhat[1] - bounds[1, 0]
 
-        xhat_upper[2] = -math.pi/2 - np.arctan2(self.yhat[1, 1] + bounds[1, 1], self.yhat[0, 1] - bounds[0, 1])
-        xhat_lower[2] = -math.pi/2 - np.arctan2(self.yhat[1, 1] - bounds[1, 1], self.yhat[0, 1] + bounds[0, 1])
+        xhat_upper[2] = np.arctan2(self.yhat[1, 1] + bounds[1, 1], self.yhat[0, 1] - bounds[0, 1])-math.pi/2
+        xhat_lower[2] = np.arctan2(self.yhat[1, 1] - bounds[1, 1], self.yhat[0, 1] + bounds[0, 1])-math.pi/2
+        # print(bounds[0, 1], bounds[1, 1])
 
-        xhat_upper[3] = self.xhat[3] + np.linalg.norm(bounds[:2, 1])/FPS/3
-        xhat_lower[3] = self.xhat[3] - np.linalg.norm(bounds[:2, 1])/FPS/3
+        xhat_upper[3] = self.xhat[3] + np.linalg.norm(bounds[:2, 1])
+        xhat_lower[3] = self.xhat[3] - np.linalg.norm(bounds[:2, 1])
 
         # this step does an exhaustive search through upper and lower bound combinations for the last component
         # it's not ideal but requires 16 computations in this case
@@ -246,8 +254,10 @@ class CarSprite(pygame.sprite.Sprite):
                         val = ODE.invert_position(0.0, test, self.u[:, :])[4]
                         lb = min(lb, val)
                         ub = max(ub, val)
-        xhat_lower[4] = lb
-        xhat_upper[4] = ub
+        xhat_lower[4] = min(lb/2.5+self.xhat[4], self.state[4])
+        xhat_upper[4] = max(ub/2.5+self.xhat[4], self.state[4])
+        # xhat_lower[4] = xhat_lower[2]-self.h_est+self.xhat[4]
+        # xhat_upper[4] = xhat_upper[2]-self.h_est+self.xhat[4]
         # i = 4
         # print(self.xhat[i], xhat_lower[i], xhat_upper[i])
 
@@ -266,7 +276,7 @@ def draw_speed_bar(speed, speed_est, speed_lower, speed_upper):
     BAR_LEN = 200
     BAR_WIDTH = 20
     TXT_OFFSET = 5
-    SPEED_MAX = 10
+    SPEED_MAX = speed_limit
     speed_pos = speed/SPEED_MAX*BAR_LEN+BAR_LEFT
     speed_pos_est = speed_est/SPEED_MAX*BAR_LEN+BAR_LEFT
     speed_lower_pos = speed_lower/SPEED_MAX*BAR_LEN+BAR_LEFT
@@ -303,7 +313,7 @@ def draw_heading(sprite, angle_lower, angle_upper):
     # heading_est = sprite.xhat[2]
     # arrow_tip = (sprite.state[0]-ARROW_LEN*math.sin(heading_est), sprite.state[1]-ARROW_LEN*math.cos(heading_est))
     # pygame.draw.polygon(screen, YELLOW, [(sprite.state[0], sprite.state[1]), (arrow_tip[0]-ARROW_LEN*math.tan(angle_lower)*math.cos(heading_est), arrow_tip[1]+ARROW_LEN*math.tan(angle_lower)*math.sin(heading_est)), (arrow_tip[0]+ARROW_LEN*math.tan(angle_upper)*math.cos(heading_est), arrow_tip[1]-ARROW_LEN*math.tan(angle_upper)*math.sin(heading_est))])
-    pygame.draw.polygon(screen, YELLOW, [(sprite.state[0], sprite.state[1]), (sprite.state[0]-2*ARROW_LEN*math.sin(angle_lower), sprite.state[1]-2*ARROW_LEN*math.cos(angle_lower)), (sprite.state[0]-2*ARROW_LEN*math.sin(angle_upper), sprite.state[1]-2*ARROW_LEN*math.cos(angle_upper))])
+    pygame.draw.polygon(screen, YELLOW, [(sprite.x, sprite.y), (sprite.x-2*ARROW_LEN*math.sin(angle_lower), sprite.y-2*ARROW_LEN*math.cos(angle_lower)), (sprite.x-2*ARROW_LEN*math.sin(angle_upper), sprite.y-2*ARROW_LEN*math.cos(angle_upper))])
     # pygame.draw.polygon(screen, YELLOW, [(sprite.state[0], sprite.state[1]), (sprite.state[0]-ARROW_LEN*math.sin(angle_lower)/math.cos(heading_est-angle_lower), sprite.state[1]-ARROW_LEN*math.cos(angle_lower)/math.cos(heading_est-angle_lower)), (sprite.state[0]-ARROW_LEN*math.sin(angle_upper)/math.cos(heading_est-angle_upper), sprite.state[1]-ARROW_LEN*math.cos(angle_upper)/math.cos(heading_est-angle_upper))])
 
 
@@ -330,8 +340,8 @@ while running:
     screen.fill(WHITE)
     draw_heading(sprite, xhat_lower[2], xhat_upper[2])
     all_sprites.draw(screen)
-    pygame.draw.line(screen, RED, (sprite.state[0], sprite.state[1]), (sprite.state[0]-ARROW_LEN*math.sin(sprite.state[2]), sprite.state[1]-ARROW_LEN*math.cos(sprite.state[2])), width=2)
-    pygame.draw.line(screen, GREEN, (sprite.state[0], sprite.state[1]), (sprite.state[0]-ARROW_LEN*math.sin(sprite.xhat[2]), sprite.state[1]-ARROW_LEN*math.cos(sprite.xhat[2])), width=2)
+    pygame.draw.line(screen, RED, (sprite.x, sprite.y), (sprite.x-ARROW_LEN*math.sin(sprite.h), sprite.y-ARROW_LEN*math.cos(sprite.h)), width=2)
+    pygame.draw.line(screen, GREEN, (sprite.x, sprite.y), (sprite.x-ARROW_LEN*math.sin(sprite.h_est), sprite.y-ARROW_LEN*math.cos(sprite.h_est)), width=2)
     # pygame.draw.circle(screen, RED, (sprite.xhat[0], sprite.xhat[1]), 10)
     # draw_speed_bar(sprite.state[3])
 
