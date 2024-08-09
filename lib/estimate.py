@@ -1,6 +1,6 @@
 import numpy as np
-from moving_polyfit.moving_ls import PolyEstimator
-from moving_gauss import GaussEstimator
+from lib.moving_ls import PolyEstimator
+from lib.moving_gauss import GaussEstimator
 from lib.func import generate_lagrange, deriv_bound
 import matplotlib.pyplot as plt
 
