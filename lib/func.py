@@ -47,6 +47,12 @@ def generate_lagrange(d, N, sampling_dt, verbose_lagrange=False):
     return lagrange_pols, l_indices
 
 def deriv_bound(k, d, M, delta_s=1):
+    '''
+    Function to compute the offline term of the error bound
+    Inputs:
+        k - derivative being estimated
+        d - 
+    '''
     if k==0:
         return 0.25*np.power(delta_s, d+1)*M/(d+1)
     return np.power(delta_s, d-k+1)*M*math.comb(d, k-1)
